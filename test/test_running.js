@@ -1,34 +1,34 @@
 const truffleAssert = require('truffle-assertions');
 const RunningContract = artifacts.require("./Running.sol");
 
-contract('Running', accounts => {
+contract('Running', function(accounts) {
 
-    const ownerAccount = accounts[0];
-    const firstAccount = accounts[1];
+    const [ownerAccount, firstAccount] = accounts;
+    let instance;
 
-    it('Running by default is false', async () => {
+    beforeEach('initialise contract', async function() {
 
-        let contract = await RunningContract.deployed();
-
-        assert.isFalse(await contract.running());
+        instance = await RunningContract.new({from: ownerAccount});
     });
 
-    it('the owner should be able to change running', async () => {
+    it('Running by default is false', async function() {
+
+        assert.isFalse(await instance.getRunning.call());
+    });
+
+    it('the owner should be able to change running', async function() {
         
-        const contract = await RunningContract.deployed();
-        const txObj = await contract.setRunning(true, {from: ownerAccount});
+        const txObj = await instance.setRunning(true, {from: ownerAccount});
         
-        assert.isTrue(await contract.running());
+        assert.isTrue(await instance.getRunning.call());
         assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
         assert.strictEqual(txObj.logs[0].event, 'LogRunningChanged');
     });
 
-    it('only the owner can change the running state', async () => {
-
-        const contract = await RunningContract.deployed();
+    it('only the owner can change the running state', async function() {
 
         await truffleAssert.reverts(
-            contract.setRunning(true, {from: firstAccount}),
+            instance.setRunning(true, {from: firstAccount}),
             'Owner permission required'
         );
 

@@ -3,7 +3,7 @@ import "./Owned.sol";
 
 contract Running is Owned
 {
-    bool public running;
+    bool private running;
 
     event LogRunningChanged(bool oldRunning, bool newRunning);
 
@@ -15,8 +15,11 @@ contract Running is Owned
 
     constructor() public
     {
-        // By default we are stopped
-        running = false;
+    }
+
+    function getRunning() public view returns(bool)
+    {
+        return running;
     }
 
     function setRunning(bool newRunning) public isOwner
