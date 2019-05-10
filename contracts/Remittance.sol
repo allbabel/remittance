@@ -3,8 +3,8 @@ import "./Running.sol";
 
 contract Remittance is Running
 {
-    bytes32 public password1;
-    bytes32 public password2;
+    bytes32 password1;
+    bytes32 password2;
     bool locked;
 
     event LogDeposit(address owner, bytes32 password1, bytes32 password2, uint256 amount);
@@ -13,7 +13,7 @@ contract Remittance is Running
     constructor()
         public
     {
-        running = true;
+        setRunning(true);
     }
 
     modifier isUnlocked()
@@ -26,6 +26,14 @@ contract Remittance is Running
     {
         require(locked, 'Remittance is unlocked');
         _;
+    }
+
+    function getLocked()
+        public
+        view
+        returns(bool)
+    {
+        return locked;
     }
 
     function deposit(bytes32 _password1, bytes32 _password2)
@@ -44,7 +52,7 @@ contract Remittance is Running
         // Lock contract to avoid more deposits
         locked = true;
 
-        emit LogDeposit(owner, password1, password2, msg.value);
+        emit LogDeposit(getOwner(), password1, password2, msg.value);
     }
 
     function withdraw(bytes32 _password1, bytes32 _password2)
@@ -56,6 +64,6 @@ contract Remittance is Running
         require(balance > 0, 'No balance available');
         msg.sender.transfer(balance);
 
-        emit LogTransfer(owner, msg.sender, password1, password2, balance);
+        emit LogTransfer(getOwner(), msg.sender, password1, password2, balance);
     }
 }
