@@ -11,16 +11,16 @@ contract('Running', function(accounts) {
         instance = await RunningContract.new({from: ownerAccount});
     });
 
-    it('Running by default is false', async function() {
+    it('Running by default is true', async function() {
 
-        assert.isFalse(await instance.getRunning.call());
+        assert.isTrue(await instance.getRunning.call());
     });
 
     it('the owner should be able to change running', async function() {
         
-        const txObj = await instance.setRunning(true, {from: ownerAccount});
+        const txObj = await instance.pause({from: ownerAccount});
         
-        assert.isTrue(await instance.getRunning.call());
+        assert.isFalse(await instance.getRunning.call());
         assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
         assert.strictEqual(txObj.logs[0].event, 'LogRunningChanged');
     });
@@ -28,7 +28,7 @@ contract('Running', function(accounts) {
     it('only the owner can change the running state', async function() {
 
         await truffleAssert.reverts(
-            instance.setRunning(true, {from: firstAccount}),
+            instance.resume({from: firstAccount}),
             'Owner permission required'
         );
 
