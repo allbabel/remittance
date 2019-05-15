@@ -45,7 +45,7 @@ contract('Remittance', function(accounts) {
                 truffleAssert.reverts(
                     instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2),
                                     {from:ownerAccount, value:valueToSend}), 
-                    'Remittance is locked'
+                    'Deposit exists'
                 );
                 
                 done();
@@ -71,7 +71,9 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
                 truffleAssert.reverts(
-                    instance.withdraw(  web3.utils.stringToHex(falsePassword1), web3.utils.stringToHex(falsePassword2), 
+                    instance.withdraw(  ownerAccount, 
+                                        web3.utils.stringToHex(falsePassword1), 
+                                        web3.utils.stringToHex(falsePassword2), 
                                         {from:firstAccount}),
                     'Invalid answer'
                 );
@@ -84,10 +86,11 @@ contract('Remittance', function(accounts) {
     it('Should be unable to withdraw if locked', function() {
 
         truffleAssert.reverts(
-            instance.withdraw(  web3.utils.stringToHex(falsePassword1), 
+            instance.withdraw(  ownerAccount,
+                                web3.utils.stringToHex(falsePassword1), 
                                 web3.utils.stringToHex(falsePassword2), 
                                 {from:ownerAccount}),
-            'Remittance is unlocked');
+            'Invalid deposit');
     });
 
     it('Should be able to withdraw deposit with valid passwords', function(done) {
@@ -99,7 +102,8 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
-                return instance.withdraw(   web3.utils.stringToHex(password1), 
+                return instance.withdraw(   ownerAccount,
+                                            web3.utils.stringToHex(password1), 
                                             web3.utils.stringToHex(password2), 
                                             {from:firstAccount});
             })
