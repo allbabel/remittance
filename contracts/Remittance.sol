@@ -22,9 +22,9 @@ contract Remittance is Running
     }
 
     constructor()
+        Running(true)
         public
     {
-        setRunning(true);
     }
 
     modifier depositDoesNotExist(address addr)
@@ -107,12 +107,5 @@ contract Remittance is Running
                             deposits[owner].password1,
                             deposits[owner].password2,
                             deposits[owner].value);
-    }
-
-    function killMe()
-        public
-        isOwner
-    {
-        selfdestruct(msg.sender);
     }
 }
