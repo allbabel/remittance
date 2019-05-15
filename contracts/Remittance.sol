@@ -3,87 +3,110 @@ import "./Running.sol";
 
 contract Remittance is Running
 {
-    bytes32 password1;
-    bytes32 password2;
-    uint timeout;
-    uint created;
     uint constant DEFAULT_TIMEOUT = 7 days;
-    bool locked;
 
-    event LogDeposit(address owner, bytes32 password1, bytes32 password2, uint256 amount);
+    mapping(address => Deposit) deposits;
+
+    event LogDeposit(address owner, bytes32 password1, bytes32 password2, uint timeout, uint created, uint value);
     event LogTransfer(address owner, address remittant, bytes32 password1, bytes32 password2, uint256 amount);
     event LogTimeoutChanged(address owner, uint newDays, uint oldDays);
+
+    struct Deposit
+    {
+        address owner;
+        bytes32 password1;
+        bytes32 password2;
+        uint timeout;
+        uint created;
+        uint value;
+    }
 
     constructor()
         public
     {
         setRunning(true);
-        timeout = DEFAULT_TIMEOUT;
-        created = now;
     }
 
-    function isItTime()
+    modifier depositDoesNotExist(address addr)
+    {
+        require(deposits[addr].created == 0, 'Deposit exists');
+        _;
+    }
+
+    modifier depositExists(address addr)
+    {
+        require(deposits[addr].created > 0, 'Invalid deposit');
+        _;
+    }
+
+    function isItTime(address addr)
         private
         view
+        depositExists(addr)
         returns(bool)
     {
-        return (now - created) > timeout;
+        Deposit storage deposit = deposits[addr];
+        return (now - deposit.created) > deposit.timeout;
     }
 
-    function setTimeoutInDays(uint8 _timeout)
+    function setTimeoutInDays(uint _timeout)
         public
-        isOwner
+        depositExists(msg.sender)
     {
-        require(_timeout > 0, 'Timeout needs to be valid');
-
+        require(_timeout > 0 && _timeout < 28, 'Timeout needs to be valid');
         uint newDays = (_timeout) * 1 days;
         uint oldDays = _timeout;
-        timeout = newDays;
+        deposits[msg.sender].timeout = newDays;
 
         emit LogTimeoutChanged(getOwner(), newDays, oldDays);
     }
 
     function deposit(bytes32 _password1, bytes32 _password2)
         public
-        isOwner
         payable
+        depositDoesNotExist(msg.sender)
     {
-        require(!locked, 'Remittance is locked');
-
         // Amount deposited to contract, we need something
         require(msg.value > 0, 'Need to deposit something');
 
         require(_password1.length > 0 || _password2.length > 0, 'Invalid password(s)');
 
-        locked = true;
+        deposits[msg.sender] = Deposit( msg.sender,
+                                        _password1,
+                                        _password2,
+                                        DEFAULT_TIMEOUT,
+                                        now,
+                                        msg.value);
 
-        // Store the puzzle
-        password1 = _password1;
-        password2 = _password2;
-
-        emit LogDeposit(getOwner(), password1, password2, msg.value);
+        emit LogDeposit(msg.sender,
+                        deposits[msg.sender].password1,
+                        deposits[msg.sender].password2,
+                        deposits[msg.sender].timeout,
+                        deposits[msg.sender].created,
+                        deposits[msg.sender].value);
     }
 
-    function withdraw(bytes memory _password1, bytes memory _password2)
+    function withdraw(address owner, bytes memory _password1, bytes memory _password2)
         public
+        depositExists(owner)
     {
-        require(locked, 'Remittance is unlocked');
+        require(keccak256(_password1) == deposits[owner].password1 &&
+                keccak256(_password2) == deposits[owner].password2, 'Invalid answer');
 
-        require((getOwner() == msg.sender && isItTime()) ||
-                msg.sender != getOwner(), 'Unable to withdraw');
+        require(deposits[owner].value > 0, 'No balance available');
+        msg.sender.transfer(deposits[owner].value);
+        deposits[owner] = Deposit(  address(0x0),
+                                    '',
+                                    '',
+                                    0,
+                                    0,
+                                    0);
 
-        require(keccak256(_password1) == password1 &&
-                keccak256(_password2) == password2, 'Invalid answer');
-
-        locked = false;
-
-        uint balance = address(this).balance;
-        require(balance > 0, 'No balance available');
-        msg.sender.transfer(balance);
-
-        password1 = '';
-        password2 = '';
-        emit LogTransfer(getOwner(), msg.sender, password1, password2, balance);
+        emit LogTransfer(   owner,
+                            msg.sender,
+                            deposits[owner].password1,
+                            deposits[owner].password2,
+                            deposits[owner].value);
     }
 
     function killMe()
