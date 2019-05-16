@@ -13,8 +13,15 @@ contract Running is Owned
         _;
     }
 
-    constructor() public
+    modifier isPaused
     {
+        require(!running, "We are paused");
+        _;
+    }
+
+    constructor(bool _running) public
+    {
+        running = _running;
     }
 
     function getRunning() public view returns(bool)
@@ -22,9 +29,30 @@ contract Running is Owned
         return running;
     }
 
-    function setRunning(bool newRunning) public isOwner
+    function pause() public isOwner
+        isRunning
+    {
+        setRunning(false);
+    }
+
+    function resume() public isOwner
+        isPaused
+    {
+        setRunning(true);
+    }
+
+    function setRunning(bool newRunning)
+        public
+        isOwner
     {
         emit LogRunningChanged(running, newRunning);
         running = newRunning;
+    }
+
+    function kill()
+        public
+        isOwner
+    {
+        selfdestruct(msg.sender);
     }
 }

@@ -33,7 +33,7 @@ contract('Remittance', function(accounts) {
             .catch(done);
     });
 
-    it('Should be locked after a successful deposit', function(done) {
+    it('Should be unable to deposit after a successful deposit', function(done) {
 
         instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2), 
                         {from:ownerAccount, value:valueToSend})
@@ -45,7 +45,7 @@ contract('Remittance', function(accounts) {
                 truffleAssert.reverts(
                     instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2),
                                     {from:ownerAccount, value:valueToSend}), 
-                    'Remittance is locked'
+                    'Deposit exists'
                 );
                 
                 done();
@@ -71,7 +71,9 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
                 truffleAssert.reverts(
-                    instance.withdraw(  web3.utils.stringToHex(falsePassword1), web3.utils.stringToHex(falsePassword2), 
+                    instance.withdraw(  ownerAccount, 
+                                        web3.utils.stringToHex(falsePassword1), 
+                                        web3.utils.stringToHex(falsePassword2), 
                                         {from:firstAccount}),
                     'Invalid answer'
                 );
@@ -81,13 +83,14 @@ contract('Remittance', function(accounts) {
             .catch(done);
     });
 
-    it('Should be unable to withdraw if locked', function() {
+    it('Should be unable to withdraw if not already deposited', function() {
 
         truffleAssert.reverts(
-            instance.withdraw(  web3.utils.stringToHex(falsePassword1), 
+            instance.withdraw(  ownerAccount,
+                                web3.utils.stringToHex(falsePassword1), 
                                 web3.utils.stringToHex(falsePassword2), 
                                 {from:ownerAccount}),
-            'Remittance is unlocked');
+            'Invalid deposit');
     });
 
     it('Should be able to withdraw deposit with valid passwords', function(done) {
@@ -99,7 +102,8 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
-                return instance.withdraw(   web3.utils.stringToHex(password1), 
+                return instance.withdraw(   ownerAccount,
+                                            web3.utils.stringToHex(password1), 
                                             web3.utils.stringToHex(password2), 
                                             {from:firstAccount});
             })
@@ -113,4 +117,49 @@ contract('Remittance', function(accounts) {
             .catch(done);
     });
 
+    it('Contract should have a cut of the action', function(done) {
+
+        instance.setDepositFee('100', {from: ownerAccount})
+            .then(function() {
+                
+                return instance.depositFee();
+            })
+            .then(function(depositFee) {
+
+                assert.strictEqual('100', depositFee.toString(), 'Deposit fee is not set');
+
+                return instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2), 
+                                        {from:ownerAccount, value:valueToSend});
+            })
+            .then(function(txObj) {
+                
+                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
+                assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
+                
+                return instance.withdraw(   ownerAccount,
+                                            web3.utils.stringToHex(password1), 
+                                            web3.utils.stringToHex(password2), 
+                                            {from:firstAccount});
+            })
+            .then(function(txObj) {
+                
+                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
+                assert.strictEqual(txObj.logs[0].event, 'LogTransfer');
+                
+                return web3.eth.getBalance(instance.address);
+            })
+            .then(function(balance) {
+                
+                assert.strictEqual(balance, '100', 'The contract should have 100 Wei cut');
+                
+                return instance.withdrawFromContract();
+            })
+            .then(function(txObj) {
+
+                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
+                assert.strictEqual(txObj.logs[0].event, 'LogWithdraw');
+                done();
+            })
+            .catch(done);
+    });
 });
