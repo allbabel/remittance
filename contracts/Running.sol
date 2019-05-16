@@ -13,6 +13,12 @@ contract Running is Owned
         _;
     }
 
+    modifier isPaused
+    {
+        require(!running, "We are paused");
+        _;
+    }
+
     constructor(bool _running) public
     {
         running = _running;
@@ -24,17 +30,19 @@ contract Running is Owned
     }
 
     function pause() public isOwner
+        isRunning
     {
         setRunning(false);
     }
 
     function resume() public isOwner
+        isPaused
     {
         setRunning(true);
     }
 
     function setRunning(bool newRunning)
-        private
+        public
         isOwner
     {
         emit LogRunningChanged(running, newRunning);
