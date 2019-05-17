@@ -1,23 +1,25 @@
 pragma solidity 0.5.0;
 import "./Running.sol";
+import "./SafeMath.sol";
 
 contract Remittance is Running
 {
+    using SafeMath for uint256;
     uint constant DEFAULT_TIMEOUT = 7 days;
     uint public depositFee;
 
     mapping(address => Deposit) public deposits;
 
     event LogDeposit(address indexed owner, bytes32 password1, bytes32 password2, uint timeout, uint indexed created, uint value);
-    event LogTransfer(address indexed owner, address remittant, bytes32 password1, bytes32 password2, uint256 amount);
+    event LogTransfer(address indexed owner, address indexed remittant, uint256 amount);
     event LogTimeoutChanged(address indexed owner, uint newDays, uint oldDays);
     event LogWithdraw(address indexed owner, uint amount);
 
     struct Deposit
     {
         address owner;
-        bytes32 password1;
-        bytes32 password2;
+        bytes32 hashPassword1;
+        bytes32 hashPassword2;
         uint timeout;
         uint created;
         uint value;
@@ -48,15 +50,15 @@ contract Remittance is Running
         require(depositFee != _depositFee, 'Values are equal');
         depositFee = _depositFee;
     }
-    
+
     function isItTime(address addr)
-        private
+        public
         view
         depositExists(addr)
         returns(bool)
     {
         Deposit storage deposit = deposits[addr];
-        return (now - deposit.created) > deposit.timeout;
+        return now.sub(deposit.created) > deposit.timeout;
     }
 
     function setTimeoutInDays(uint timeout)
@@ -69,7 +71,7 @@ contract Remittance is Running
         deposits[msg.sender].timeout = timeout * 1 days;
     }
 
-    function deposit(bytes32 _password1, bytes32 _password2)
+    function deposit(bytes32 hashPassword1, bytes32 hashPassword2)
         public
         payable
         depositDoesNotExist(msg.sender)
@@ -77,7 +79,7 @@ contract Remittance is Running
         // Amount deposited to contract, we need something
         require(msg.value > 0, 'Need to deposit something');
 
-        require(_password1.length > 0 || _password2.length > 0, 'Invalid password(s)');
+        require(hashPassword1.length > 0 || hashPassword2.length > 0, 'Invalid password(s)');
 
         uint depositValue = msg.value;
         if (depositFee < msg.value)
@@ -86,15 +88,15 @@ contract Remittance is Running
         }
 
         deposits[msg.sender] = Deposit( msg.sender,
-                                        _password1,
-                                        _password2,
+                                        hashPassword1,
+                                        hashPassword2,
                                         DEFAULT_TIMEOUT,
                                         now,
                                         depositValue);
 
         emit LogDeposit(msg.sender,
-                        deposits[msg.sender].password1,
-                        deposits[msg.sender].password2,
+                        deposits[msg.sender].hashPassword1,
+                        deposits[msg.sender].hashPassword2,
                         deposits[msg.sender].timeout,
                         deposits[msg.sender].created,
                         deposits[msg.sender].value);
@@ -104,23 +106,17 @@ contract Remittance is Running
         public
         depositExists(owner)
     {
-        require(keccak256(_password1) == deposits[owner].password1 &&
-                keccak256(_password2) == deposits[owner].password2, 'Invalid answer');
+        require(keccak256(_password1) == deposits[owner].hashPassword1 &&
+                keccak256(_password2) == deposits[owner].hashPassword2, 'Invalid answer');
 
         require(deposits[owner].value > 0, 'No balance available');
-        msg.sender.transfer(deposits[owner].value);
-        deposits[owner] = Deposit(  address(0x0),
-                                    '',
-                                    '',
-                                    0,
-                                    0,
-                                    0);
 
+        uint valueToSend = deposits[owner].value;
+        delete deposits[owner];
+        msg.sender.transfer(valueToSend);
         emit LogTransfer(   owner,
                             msg.sender,
-                            deposits[owner].password1,
-                            deposits[owner].password2,
-                            deposits[owner].value);
+                            valueToSend);
     }
 
     function withdrawFromContract()

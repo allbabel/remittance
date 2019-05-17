@@ -7,13 +7,13 @@ contract Running is Owned
 
     event LogRunningChanged(bool oldRunning, bool newRunning);
 
-    modifier isRunning
+    modifier whenRunning
     {
         require(running, "We have stopped");
         _;
     }
 
-    modifier isPaused
+    modifier whenPaused
     {
         require(!running, "We are paused");
         _;
@@ -29,14 +29,14 @@ contract Running is Owned
         return running;
     }
 
-    function pause() public isOwner
-        isRunning
+    function pause() public
+        whenRunning
     {
         setRunning(false);
     }
 
-    function resume() public isOwner
-        isPaused
+    function resume() public
+        whenPaused
     {
         setRunning(true);
     }
@@ -52,6 +52,7 @@ contract Running is Owned
     function kill()
         public
         isOwner
+        whenPaused
     {
         selfdestruct(msg.sender);
     }

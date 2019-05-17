@@ -8,7 +8,7 @@ contract('Running', function(accounts) {
 
     beforeEach('initialise contract', async function() {
 
-        instance = await RunningContract.new({from: ownerAccount});
+        instance = await RunningContract.new(true, {from: ownerAccount});
     });
 
     it('Running by default is true', async function() {
@@ -28,7 +28,7 @@ contract('Running', function(accounts) {
     it('only the owner can change the running state', async function() {
 
         await truffleAssert.reverts(
-            instance.resume({from: firstAccount}),
+            instance.pause({from: firstAccount}),
             'Owner permission required'
         );
 
