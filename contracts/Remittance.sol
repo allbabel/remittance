@@ -8,10 +8,10 @@ contract Remittance is Running
 
     mapping(address => Deposit) public deposits;
 
-    event LogDeposit(address owner, bytes32 password1, bytes32 password2, uint timeout, uint created, uint value);
-    event LogTransfer(address owner, address remittant, bytes32 password1, bytes32 password2, uint256 amount);
-    event LogTimeoutChanged(address owner, uint newDays, uint oldDays);
-    event LogWithdraw(address owner, uint amount);
+    event LogDeposit(address indexed owner, bytes32 password1, bytes32 password2, uint timeout, uint indexed created, uint value);
+    event LogTransfer(address indexed owner, address remittant, bytes32 password1, bytes32 password2, uint256 amount);
+    event LogTimeoutChanged(address indexed owner, uint newDays, uint oldDays);
+    event LogWithdraw(address indexed owner, uint amount);
 
     struct Deposit
     {
