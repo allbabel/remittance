@@ -9,66 +9,75 @@ contract('Remittance', function(accounts) {
     
     const falsePassword1 = 'something';
     const falsePassword2 = 'something else';
+    const timeout = 60 * 60 * 24;
 
     let instance;
     const valueToSend = web3.utils.toWei('0.1', 'ether');
 
-    beforeEach('initialise contract', done => {
+    beforeEach('initialise contract', () => {
 
-        RemittanceContract.new({from: ownerAccount})
+        return RemittanceContract.new({from: ownerAccount})
             .then(_instance => {
                 instance = _instance;
-                done();
             })
-            .catch(done);
+            .catch(console.err);
     });
     
-    it('Running by default is true', done => {
+    it('Running by default is true', () => {
 
-        instance.getRunning.call()
+        return instance.getRunning.call()
             .then(running => {
                 assert.isTrue(running);
-                done();
             })
-            .catch(done);
+            .catch(console.err);
     });
 
-    it('Should be unable to deposit after a successful deposit', function(done) {
-
-        instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2), 
-                        {from:ownerAccount, value:valueToSend})
+    it('Should emit on deposit', function() {
+        return instance.deposit(web3.utils.soliditySha3(password1), 
+                                web3.utils.soliditySha3(password2), 
+                                timeout,
+                                {from:ownerAccount, value:valueToSend})
             .then(function(txObj) {
                 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
+            })
+            .catch(console.err);
+    });
+
+    it('Should be unable to deposit after a successful deposit', function() {
+
+        return instance.deposit(web3.utils.soliditySha3(password1), 
+                                web3.utils.soliditySha3(password2), 
+                                timeout,
+                                {from:ownerAccount, value:valueToSend})
+            .then(function(txObj) {
+                
                 truffleAssert.reverts(
-                    instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2),
+                    instance.deposit(web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2), timeout,
                                     {from:ownerAccount, value:valueToSend}), 
                     'Deposit exists'
                 );
-                
-                done();
             })
-            .catch(done);
+            .catch(console.err);
     });
 
     it('Deposit should revert if no value', function() {
 
         truffleAssert.reverts(
-            instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2), 
-                            {from:ownerAccount, value:'0'}),
+            instance.deposit(   web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2), 
+                                timeout,
+                                {from:ownerAccount, value:'0'}),
             'Need to deposit something');
     });
 
-    it('Should be unable to withdraw deposit with invalid passwords', function(done) {
+    it('Should be unable to withdraw deposit with invalid passwords', function() {
 
-        instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2), 
-                        {from:ownerAccount, value:valueToSend})
+        instance.deposit(   web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2), 
+                            timeout,
+                            {from:ownerAccount, value:valueToSend})
             .then(function(txObj) {
-                
-                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
-                assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
                 truffleAssert.reverts(
                     instance.withdraw(  ownerAccount, 
@@ -77,10 +86,8 @@ contract('Remittance', function(accounts) {
                                         {from:firstAccount}),
                     'Invalid answer'
                 );
-                
-                done();
             })
-            .catch(done);
+            .catch(console.err);
     });
 
     it('Should be unable to withdraw if not already deposited', function() {
@@ -93,14 +100,20 @@ contract('Remittance', function(accounts) {
             'Invalid deposit');
     });
 
-    it('Should be able to withdraw deposit with valid passwords', function(done) {
+    it('Should be able to withdraw deposit with valid passwords', function() {
 
-        instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2), 
-                        {from:ownerAccount, value:valueToSend})
+        let originalBalance;
+        let txFee;
+        let gasUsed;
+
+        web3.eth.getBalance(firstAccount).
+            then(function(balance) {
+                originalBalance = web3.utils.toBN(balance);
+                return instance.deposit(web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2),
+                                        timeout, 
+                                        {from:ownerAccount, value:valueToSend})        
+            })
             .then(function(txObj) {
-                
-                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
-                assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
                 return instance.withdraw(   ownerAccount,
                                             web3.utils.stringToHex(password1), 
@@ -111,13 +124,25 @@ contract('Remittance', function(accounts) {
                 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogTransfer');
-                
-                done();
+
+                web3.eth.getTransaction(txObj.receipt.transactionHash, function(err, tx) {
+                    
+                    txFee = web3.utils.toBN(tx.gasPrice * txObj.receipt.gasUsed);
+                    
+                    web3.eth.getBalance(firstAccount, function(err, balance) {
+
+                        const newBalance = web3.utils.toBN(balance);
+            
+                        assert.strictEqual( originalBalance.add(web3.utils.toBN(valueToSend)).sub(txFee).toString(10), 
+                                            newBalance.toString(10),
+                                            'New balance is not correct');
+                    });
+                });
             })
-            .catch(done);
+            .catch(console.err);
     });
 
-    it('Contract should have a cut of the action', function(done) {
+    it('Contract should have a cut of the action', function() {
 
         instance.setDepositFee('100', {from: ownerAccount})
             .then(function() {
@@ -128,7 +153,8 @@ contract('Remittance', function(accounts) {
 
                 assert.strictEqual('100', depositFee.toString(), 'Deposit fee is not set');
 
-                return instance.deposit(web3.utils.keccak256(password1), web3.utils.keccak256(password2), 
+                return instance.deposit(web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2), 
+                                        timeout,
                                         {from:ownerAccount, value:valueToSend});
             })
             .then(function(txObj) {
@@ -158,8 +184,7 @@ contract('Remittance', function(accounts) {
 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogWithdraw');
-                done();
             })
-            .catch(done);
+            .catch(console.err);
     });
 });
