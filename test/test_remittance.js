@@ -131,12 +131,26 @@ contract('Remittance', function(accounts) {
                     web3.eth.getBalance(firstAccount, function(err, balance) {
 
                         const newBalance = web3.utils.toBN(balance);
-            
                         assert.strictEqual( originalBalance.add(web3.utils.toBN(valueToSend)).sub(txFee).toString(10), 
                                             newBalance.toString(10),
                                             'New balance is not correct');
                     });
                 });
+            })
+            .catch(console.err);
+    });
+
+    it("Owner shouldn't be able to withdraw deposit with valid passwords until expired", function() {
+
+        instance.deposit(   passwordHash,
+                            timeout, 
+                            {from:firstAccount, value:valueToSend})        
+            .then(function(txObj) {
+                
+                truffleAssert.reverts(
+                    instance.ownerWithdraw( firstAccount,
+                                            {from:ownerAccount}),
+                    'Deposit is not expired');
             })
             .catch(console.err);
     });
@@ -177,7 +191,7 @@ contract('Remittance', function(accounts) {
                 
                 assert.strictEqual(balance, '100', 'The contract should have 100 Wei cut');
                 
-                return instance.withdrawFromContract();
+                return instance.withdrawDepositFees();
             })
             .then(function(txObj) {
 

@@ -53,7 +53,7 @@ contract Remittance is Running
         depositFee = _depositFee;
     }
 
-    function isItTime(address addr)
+    function isExpired(address addr)
         public
         view
         depositExists(addr)
@@ -109,22 +109,38 @@ contract Remittance is Running
                         depositFee);
     }
 
-    function withdraw(address owner, bytes memory _password1, bytes memory _password2)
+    function withdraw(address depositOwner, bytes memory _password1, bytes memory _password2)
         public
-        depositExists(owner)
+        depositExists(depositOwner)
     {
-        require(keccak256(abi.encode(_password1, _password2)) == deposits[owner].hashPassword, 'Invalid answer');
-        require(deposits[owner].value > 0, 'No balance available');
+        require(msg.sender != getOwner(), 'Contract owner not allowed');
+        require(keccak256(abi.encode(_password1, _password2)) == deposits[depositOwner].hashPassword, 'Invalid answer');
+        require(deposits[depositOwner].value > 0, 'No balance available');
 
-        uint valueToSend = deposits[owner].value;
-        delete deposits[owner];
-        emit LogTransfer(   owner,
+        uint valueToSend = deposits[depositOwner].value;
+        delete deposits[depositOwner];
+        emit LogTransfer(   depositOwner,
                             msg.sender,
                             valueToSend);
         msg.sender.transfer(valueToSend);
     }
 
-    function withdrawFromContract()
+    function ownerWithdraw(address depositOwner)
+        public
+        isOwner
+    {
+        require(isExpired(depositOwner), 'Deposit is not expired');
+        require(deposits[depositOwner].value > 0, 'No balance available');
+
+        uint valueToSend = deposits[depositOwner].value;
+        delete deposits[depositOwner];
+        emit LogTransfer(   depositOwner,
+                            msg.sender,
+                            valueToSend);
+        msg.sender.transfer(valueToSend);
+    }
+
+    function withdrawDepositFees()
         public
         isOwner
     {
