@@ -6,7 +6,7 @@ contract Remittance is Running
 {
     using SafeMath for uint256;
     uint public depositFee;
-    uint public ownerFees;
+    mapping(address => uint) fees;
     uint constant MONTH_IN_SECS = 1 * 28 days;
     mapping(address => Deposit) public deposits;
 
@@ -92,7 +92,7 @@ contract Remittance is Running
         if (depositFee < msg.value)
         {
             depositValue = msg.value.sub(depositFee);
-            ownerFees = ownerFees.add(depositFee);
+            fees[getOwner()] = fees[getOwner()].add(depositFee);
         }
 
         deposits[msg.sender] = Deposit( msg.sender,
@@ -142,11 +142,10 @@ contract Remittance is Running
 
     function withdrawDepositFees()
         public
-        isOwner
     {
-        require(ownerFees > 0, 'No balance to withdraw');
-        uint toSend = ownerFees;
-        ownerFees = 0;
+        require(fees[msg.sender] > 0, 'No balance to withdraw');
+        uint toSend = fees[msg.sender];
+        delete fees[msg.sender];
         emit LogWithdraw(msg.sender, toSend);
         msg.sender.transfer(toSend);
     }
