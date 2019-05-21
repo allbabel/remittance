@@ -13,7 +13,8 @@ contract('Remittance', function(accounts) {
 
     let instance;
     const valueToSend = web3.utils.toWei('0.1', 'ether');
-
+    const passwordHash = web3.utils.soliditySha3(web3.eth.abi.encodeParameters(['string','string'], [password1, password2]));
+    
     beforeEach('initialise contract', () => {
 
         return RemittanceContract.new({from: ownerAccount})
@@ -33,8 +34,7 @@ contract('Remittance', function(accounts) {
     });
 
     it('Should emit on deposit', function() {
-        return instance.deposit(web3.utils.soliditySha3(password1), 
-                                web3.utils.soliditySha3(password2), 
+        return instance.deposit(passwordHash, 
                                 timeout,
                                 {from:ownerAccount, value:valueToSend})
             .then(function(txObj) {
@@ -48,14 +48,14 @@ contract('Remittance', function(accounts) {
 
     it('Should be unable to deposit after a successful deposit', function() {
 
-        return instance.deposit(web3.utils.soliditySha3(password1), 
-                                web3.utils.soliditySha3(password2), 
+        return instance.deposit(passwordHash, 
                                 timeout,
                                 {from:ownerAccount, value:valueToSend})
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
-                    instance.deposit(web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2), timeout,
+                    instance.deposit(passwordHash, 
+                                    timeout,
                                     {from:ownerAccount, value:valueToSend}), 
                     'Deposit exists'
                 );
@@ -66,7 +66,7 @@ contract('Remittance', function(accounts) {
     it('Deposit should revert if no value', function() {
 
         truffleAssert.reverts(
-            instance.deposit(   web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2), 
+            instance.deposit(   passwordHash, 
                                 timeout,
                                 {from:ownerAccount, value:'0'}),
             'Need to deposit something');
@@ -74,7 +74,7 @@ contract('Remittance', function(accounts) {
 
     it('Should be unable to withdraw deposit with invalid passwords', function() {
 
-        instance.deposit(   web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2), 
+        instance.deposit(   passwordHash, 
                             timeout,
                             {from:ownerAccount, value:valueToSend})
             .then(function(txObj) {
@@ -94,8 +94,8 @@ contract('Remittance', function(accounts) {
 
         truffleAssert.reverts(
             instance.withdraw(  ownerAccount,
-                                web3.utils.stringToHex(falsePassword1), 
-                                web3.utils.stringToHex(falsePassword2), 
+                                web3.utils.stringToHex(password1), 
+                                web3.utils.stringToHex(password2), 
                                 {from:ownerAccount}),
             'Invalid deposit');
     });
@@ -104,12 +104,11 @@ contract('Remittance', function(accounts) {
 
         let originalBalance;
         let txFee;
-        let gasUsed;
 
         web3.eth.getBalance(firstAccount).
             then(function(balance) {
                 originalBalance = web3.utils.toBN(balance);
-                return instance.deposit(web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2),
+                return instance.deposit(passwordHash,
                                         timeout, 
                                         {from:ownerAccount, value:valueToSend})        
             })
@@ -153,7 +152,7 @@ contract('Remittance', function(accounts) {
 
                 assert.strictEqual('100', depositFee.toString(), 'Deposit fee is not set');
 
-                return instance.deposit(web3.utils.soliditySha3(password1), web3.utils.soliditySha3(password2), 
+                return instance.deposit(passwordHash, 
                                         timeout,
                                         {from:ownerAccount, value:valueToSend});
             })

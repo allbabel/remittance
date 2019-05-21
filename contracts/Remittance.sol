@@ -10,7 +10,7 @@ contract Remittance is Running
     uint constant MONTH_IN_SECS = 1 * 28 days;
     mapping(address => Deposit) public deposits;
 
-    event LogDeposit(address indexed owner, bytes32 password1, bytes32 password2, uint timeout, uint indexed created, uint value);
+    event LogDeposit(address indexed owner, bytes32 password, uint timeout, uint indexed created, uint value, uint depositFee);
     event LogTransfer(address indexed owner, address indexed remittant, uint256 amount);
     event LogTimeoutChanged(address indexed owner, uint newTime, uint oldTime);
     event LogWithdraw(address indexed owner, uint amount);
@@ -19,8 +19,7 @@ contract Remittance is Running
     struct Deposit
     {
         address owner;
-        bytes32 hashPassword1;
-        bytes32 hashPassword2;
+        bytes32 hashPassword;
         uint timeout;
         uint created;
         uint value;
@@ -79,7 +78,7 @@ contract Remittance is Running
         deposits[msg.sender].timeout = timeout;
     }
 
-    function deposit(bytes32 hashPassword1, bytes32 hashPassword2, uint timeout)
+    function deposit(bytes32 hashPassword, uint timeout)
         public
         payable
         depositDoesNotExist(msg.sender)
@@ -87,7 +86,7 @@ contract Remittance is Running
         // Amount deposited to contract, we need something
         require(msg.value > 0, 'Need to deposit something');
         require(timeout > 0 && timeout < MONTH_IN_SECS, 'Timeout needs to be valid');
-        require(hashPassword1.length == 32 || hashPassword2.length == 32, 'Invalid password(s)');
+        require(uint(hashPassword) > 0, 'Invalid hash');
 
         uint depositValue = msg.value;
         if (depositFee < msg.value)
@@ -97,27 +96,24 @@ contract Remittance is Running
         }
 
         deposits[msg.sender] = Deposit( msg.sender,
-                                        hashPassword1,
-                                        hashPassword2,
+                                        hashPassword,
                                         timeout,
                                         now,
                                         depositValue);
 
         emit LogDeposit(msg.sender,
-                        hashPassword1,
-                        hashPassword2,
+                        hashPassword,
                         timeout,
                         now,
-                        depositValue);
+                        depositValue,
+                        depositFee);
     }
 
     function withdraw(address owner, bytes memory _password1, bytes memory _password2)
         public
         depositExists(owner)
     {
-        require(keccak256(_password1) == deposits[owner].hashPassword1 &&
-                keccak256(_password2) == deposits[owner].hashPassword2, 'Invalid answer');
-
+        require(keccak256(abi.encode(_password1, _password2)) == deposits[owner].hashPassword, 'Invalid answer');
         require(deposits[owner].value > 0, 'No balance available');
 
         uint valueToSend = deposits[owner].value;
@@ -132,7 +128,7 @@ contract Remittance is Running
         public
         isOwner
     {
-        require(ownerFees > 0, 'No balance to withdraw');        
+        require(ownerFees > 0, 'No balance to withdraw');
         uint toSend = ownerFees;
         ownerFees = 0;
         emit LogWithdraw(msg.sender, toSend);
