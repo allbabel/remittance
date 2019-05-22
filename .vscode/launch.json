@@ -11,9 +11,9 @@
             "program": "${workspaceRoot}/node_modules/truffle/build/cli.bundled.js",
             "args": ["test"],
             "cwd": "${workspaceRoot}",
-            "outFiles": [
-                "${workspaceRoot}/test/**/*"
-            ],
+            // "outFiles": [
+            //     "${workspaceRoot}/test/**/*"
+            // ],
         }
     ]
 }

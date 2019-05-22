@@ -65,18 +65,18 @@ contract('Remittance', function(accounts) {
 
     it('Deposit should revert if no value', function() {
 
-        truffleAssert.reverts(
-            instance.deposit(   passwordHash, 
-                                timeout,
-                                {from:ownerAccount, value:'0'}),
-            'Need to deposit something');
+        return truffleAssert.reverts(
+                instance.deposit(   passwordHash, 
+                                    timeout,
+                                    {from:ownerAccount, value:'0'}),
+                'Need to deposit something');
     });
 
     it('Should be unable to withdraw deposit with invalid passwords', function() {
 
-        instance.deposit(   passwordHash, 
-                            timeout,
-                            {from:ownerAccount, value:valueToSend})
+        return instance.deposit(    passwordHash, 
+                                    timeout,
+                                    {from:ownerAccount, value:valueToSend})
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
@@ -92,7 +92,7 @@ contract('Remittance', function(accounts) {
 
     it('Should be unable to withdraw if not already deposited', function() {
 
-        truffleAssert.reverts(
+        return truffleAssert.reverts(
             instance.withdraw(  ownerAccount,
                                 web3.utils.stringToHex(password1), 
                                 web3.utils.stringToHex(password2), 
@@ -105,7 +105,7 @@ contract('Remittance', function(accounts) {
         let originalBalance;
         let txFee;
 
-        web3.eth.getBalance(firstAccount).
+        return web3.eth.getBalance(firstAccount).
             then(function(balance) {
                 originalBalance = web3.utils.toBN(balance);
                 return instance.deposit(passwordHash,
@@ -114,6 +114,9 @@ contract('Remittance', function(accounts) {
             })
             .then(function(txObj) {
                 
+                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
+                assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
+
                 return instance.withdraw(   ownerAccount,
                                             web3.utils.stringToHex(password1), 
                                             web3.utils.stringToHex(password2), 
@@ -142,7 +145,7 @@ contract('Remittance', function(accounts) {
 
     it("Owner shouldn't be able to withdraw deposit with valid passwords until expired", function() {
 
-        instance.deposit(   passwordHash,
+        return instance.deposit(   passwordHash,
                             timeout, 
                             {from:firstAccount, value:valueToSend})        
             .then(function(txObj) {
@@ -157,7 +160,7 @@ contract('Remittance', function(accounts) {
 
     it('Contract should have a cut of the action', function() {
 
-        instance.setDepositFee('100', {from: ownerAccount})
+        return instance.setDepositFee('100', {from: ownerAccount})
             .then(function() {
                 
                 return instance.depositFee();
