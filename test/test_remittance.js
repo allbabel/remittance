@@ -1,5 +1,6 @@
 const truffleAssert = require('truffle-assertions');
 const RemittanceContract = artifacts.require("./Remittance.sol");
+const { toBN, stringToHex } = web3.utils;
 
 contract('Remittance', function(accounts) {
 
@@ -13,15 +14,24 @@ contract('Remittance', function(accounts) {
 
     let instance;
     const valueToSend = web3.utils.toWei('0.1', 'ether');
-    const passwordHash = web3.utils.soliditySha3(web3.eth.abi.encodeParameters(['string','string'], [password1, password2]));
+    let passwordHash;
     
-    beforeEach('initialise contract', () => {
+    beforeEach('initialise contract and hash', () => {
 
         return RemittanceContract.new({from: ownerAccount})
             .then(_instance => {
                 instance = _instance;
+
+                return instance.encode.call(stringToHex(password1), stringToHex(password2));
+
             })
-            .catch(console.err);
+            .then(function(hash) {
+                passwordHash = hash;
+            })
+            .catch(function(err) {
+                console.log(err);
+                assert.fail();
+            });
     });
     
     it('Running by default is true', () => {
@@ -30,7 +40,10 @@ contract('Remittance', function(accounts) {
             .then(running => {
                 assert.isTrue(running);
             })
-            .catch(console.err);
+            .catch(function(err) {
+                console.log(err);
+                assert.fail();
+            });
     });
 
     it('Should emit on deposit', function() {
@@ -42,8 +55,15 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
+                return instance.deposits.call(ownerAccount);
             })
-            .catch(console.err);
+            .then(function(deposit){
+                assert.strictEqual(deposit.value.toString(), valueToSend);
+            })
+            .catch(function(err) {
+                console.log(err);
+                assert.fail();
+            });
     });
 
     it('Should be unable to deposit after a successful deposit', function() {
@@ -60,7 +80,10 @@ contract('Remittance', function(accounts) {
                     'Deposit exists'
                 );
             })
-            .catch(console.err);
+            .catch(function(err) {
+                console.log(err);
+                assert.fail();
+            });
     });
 
     it('Deposit should revert if no value', function() {
@@ -87,7 +110,10 @@ contract('Remittance', function(accounts) {
                     'Invalid answer'
                 );
             })
-            .catch(console.err);
+            .catch(function(err) {
+                console.log(err);
+                assert.fail();
+            });
     });
 
     it('Should be unable to withdraw if not already deposited', function() {
@@ -104,10 +130,10 @@ contract('Remittance', function(accounts) {
 
         let originalBalance;
         let txFee;
-
+        let gasUsed;
         return web3.eth.getBalance(firstAccount).
             then(function(balance) {
-                originalBalance = web3.utils.toBN(balance);
+                originalBalance = toBN(balance);
                 return instance.deposit(passwordHash,
                                         timeout, 
                                         {from:ownerAccount, value:valueToSend})        
@@ -126,21 +152,24 @@ contract('Remittance', function(accounts) {
                 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogTransfer');
-
-                web3.eth.getTransaction(txObj.receipt.transactionHash, function(err, tx) {
-                    
-                    txFee = web3.utils.toBN(tx.gasPrice * txObj.receipt.gasUsed);
-                    
-                    web3.eth.getBalance(firstAccount, function(err, balance) {
-
-                        const newBalance = web3.utils.toBN(balance);
-                        assert.strictEqual( originalBalance.add(web3.utils.toBN(valueToSend)).sub(txFee).toString(10), 
-                                            newBalance.toString(10),
-                                            'New balance is not correct');
-                    });
-                });
+                gasUsed = txObj.receipt.gasUsed;
+                return web3.eth.getTransaction(txObj.receipt.transactionHash);
             })
-            .catch(console.err);
+            .then(function(tx) {
+                
+                txFee = toBN(tx.gasPrice * gasUsed);
+                return web3.eth.getBalance(firstAccount);
+            })
+            .then(function(balance) {
+                
+                assert.strictEqual( originalBalance.add(toBN(valueToSend)).sub(txFee).toString(), 
+                                    toBN(balance).toString(),
+                                    'New balance is not correct');
+            })
+            .catch(function(err) {
+                console.log(err);
+                assert.fail();
+            });
     });
 
     it("Owner shouldn't be able to withdraw deposit with valid passwords until expired", function() {
@@ -151,11 +180,16 @@ contract('Remittance', function(accounts) {
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
-                    instance.ownerWithdraw( firstAccount,
-                                            {from:ownerAccount}),
+                    instance.withdraw(  firstAccount,
+                                        web3.utils.stringToHex(password1), 
+                                        web3.utils.stringToHex(password2),
+                                        {from:ownerAccount}),
                     'Deposit is not expired');
             })
-            .catch(console.err);
+            .catch(function(err) {
+                console.log(err);
+                assert.fail();
+            });
     });
 
     it('Contract should have a cut of the action', function() {
@@ -201,6 +235,9 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogWithdraw');
             })
-            .catch(console.err);
+            .catch(function(err) {
+                console.log(err);
+                assert.fail();
+            });
     });
 });
