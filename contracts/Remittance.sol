@@ -6,9 +6,10 @@ contract Remittance is Running
 {
     using SafeMath for uint256;
     uint public depositFee;
-    mapping(address => uint) fees;
+    mapping(address => uint) public fees;
     uint constant MONTH_IN_SECS = 1 * 28 days;
     mapping(address => Deposit) public deposits;
+    mapping(uint => bool) public puzzles;
 
     event LogDeposit(address indexed remiter, bytes32 password, uint indexed expires, uint value, uint depositFee);
     event LogTransfer(address indexed remiter, address indexed remittant, uint256 amount);
@@ -18,7 +19,7 @@ contract Remittance is Running
     struct Deposit
     {
         address remitter;
-        bytes32 secret;
+        bytes32 puzzle;
         uint expires;
         uint value;
     }
@@ -66,7 +67,7 @@ contract Remittance is Running
         return now > deposit.expires;
     }
 
-    function deposit(bytes32 secret, uint timeout)
+    function deposit(bytes32 puzzle, uint timeout)
         public
         payable
         depositDoesNotExist(msg.sender)
@@ -74,7 +75,8 @@ contract Remittance is Running
         // Amount deposited to contract, we need something
         require(msg.value > 0, 'Need to deposit something');
         require(timeout > 0 && timeout < MONTH_IN_SECS, 'Timeout needs to be valid');
-        require(uint(secret) > 0, 'Invalid hash');
+        require(uint(puzzle) > 0, 'Invalid hash');
+        require(!puzzles[uint(puzzle)], 'Try another puzzle');
 
         uint depositValue = msg.value;
         if (depositFee < msg.value)
@@ -87,14 +89,14 @@ contract Remittance is Running
         deposits[msg.sender] = Deposit(
                                         {
                                             remitter: msg.sender,
-                                            secret: secret,
+                                            puzzle: puzzle,
                                             expires: timeout + now,
                                             value: depositValue
                                         }
                                     );
 
         emit LogDeposit(msg.sender,
-                        secret,
+                        puzzle,
                         timeout + now,
                         depositValue,
                         depositFee);
@@ -107,6 +109,8 @@ contract Remittance is Running
         require(isExpired(msg.sender), 'Deposit is not expired');
 
         uint valueToSend = deposits[msg.sender].value;
+        require(valueToSend > 0, 'Nothing to withdraw');
+
         delete deposits[msg.sender];
         emit LogTransfer(   msg.sender,
                             msg.sender,
@@ -119,11 +123,10 @@ contract Remittance is Running
         public
         depositExists(remitter)
     {
-        Deposit memory d = deposits[remitter];
-        require(d.value > 0, 'No balance available');
-        require(encode(msg.sender, _password1, _password2) == d.secret, 'Invalid answer');
+        uint valueToSend = deposits[remitter].value;
+        require(valueToSend > 0, 'No balance available');
+        require(encode(msg.sender, _password1, _password2) == deposits[remitter].puzzle, 'Invalid answer');
 
-        uint valueToSend = d.value;
         delete deposits[remitter];
         emit LogTransfer(   remitter,
                             msg.sender,
