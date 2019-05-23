@@ -1,10 +1,10 @@
 const truffleAssert = require('truffle-assertions');
 const RemittanceContract = artifacts.require("./Remittance.sol");
-const { toBN, stringToHex } = web3.utils;
+const { toBN, stringToHex, toWei } = web3.utils;
 
 contract('Remittance', function(accounts) {
 
-    [ownerAccount, firstAccount] = accounts;
+    [contractOwner, depositOwner, recipient] = accounts;
     const password1 = 'password1';
     const password2 = 'password2';
     
@@ -13,12 +13,12 @@ contract('Remittance', function(accounts) {
     const timeout = 60 * 60 * 24;
 
     let instance;
-    const valueToSend = web3.utils.toWei('0.1', 'ether');
-    let passwordHash;
+    const valueToSend = toWei('0.1', 'ether');
+    let secret;
     
     beforeEach('initialise contract and hash', () => {
 
-        return RemittanceContract.new({from: ownerAccount})
+        return RemittanceContract.new({from: contractOwner})
             .then(_instance => {
                 instance = _instance;
 
@@ -26,11 +26,7 @@ contract('Remittance', function(accounts) {
 
             })
             .then(function(hash) {
-                passwordHash = hash;
-            })
-            .catch(function(err) {
-                console.log(err);
-                assert.fail();
+                secret = hash;
             });
     });
     
@@ -39,90 +35,79 @@ contract('Remittance', function(accounts) {
         return instance.getRunning.call()
             .then(running => {
                 assert.isTrue(running);
-            })
-            .catch(function(err) {
-                console.log(err);
-                assert.fail();
             });
     });
 
     it('Should emit on deposit', function() {
-        return instance.deposit(passwordHash, 
+        return instance.deposit(recipient, 
+                                secret, 
                                 timeout,
-                                {from:ownerAccount, value:valueToSend})
+                                {from:depositOwner, value:valueToSend})
             .then(function(txObj) {
                 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
-                return instance.deposits.call(ownerAccount);
+                return instance.deposits.call(depositOwner);
             })
             .then(function(deposit){
                 assert.strictEqual(deposit.value.toString(), valueToSend);
-            })
-            .catch(function(err) {
-                console.log(err);
-                assert.fail();
             });
     });
 
     it('Should be unable to deposit after a successful deposit', function() {
 
-        return instance.deposit(passwordHash, 
+        return instance.deposit(recipient,
+                                secret, 
                                 timeout,
-                                {from:ownerAccount, value:valueToSend})
+                                {from:depositOwner, value:valueToSend})
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
-                    instance.deposit(passwordHash, 
+                    instance.deposit(recipient,
+                                    secret, 
                                     timeout,
-                                    {from:ownerAccount, value:valueToSend}), 
+                                    {from:depositOwner, value:valueToSend}), 
                     'Deposit exists'
                 );
-            })
-            .catch(function(err) {
-                console.log(err);
-                assert.fail();
             });
     });
 
     it('Deposit should revert if no value', function() {
 
         return truffleAssert.reverts(
-                instance.deposit(   passwordHash, 
+                instance.deposit(   recipient,
+                                    secret, 
                                     timeout,
-                                    {from:ownerAccount, value:'0'}),
+                                    {from:depositOwner, value:'0'}),
                 'Need to deposit something');
     });
 
     it('Should be unable to withdraw deposit with invalid passwords', function() {
 
-        return instance.deposit(    passwordHash, 
+        return instance.deposit(    recipient,
+                                    secret, 
                                     timeout,
-                                    {from:ownerAccount, value:valueToSend})
+                                    {from:depositOwner, value:valueToSend})
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
-                    instance.withdraw(  ownerAccount, 
+                    instance.withdraw(  depositOwner, 
                                         web3.utils.stringToHex(falsePassword1), 
                                         web3.utils.stringToHex(falsePassword2), 
-                                        {from:firstAccount}),
+                                        {from:recipient}),
                     'Invalid answer'
                 );
-            })
-            .catch(function(err) {
-                console.log(err);
-                assert.fail();
             });
     });
 
     it('Should be unable to withdraw if not already deposited', function() {
 
         return truffleAssert.reverts(
-            instance.withdraw(  ownerAccount,
+            instance.withdraw(  depositOwner,
                                 web3.utils.stringToHex(password1), 
                                 web3.utils.stringToHex(password2), 
-                                {from:ownerAccount}),
+                                {from:recipient}),
             'Invalid deposit');
     });
 
@@ -131,22 +116,23 @@ contract('Remittance', function(accounts) {
         let originalBalance;
         let txFee;
         let gasUsed;
-        return web3.eth.getBalance(firstAccount).
+        return web3.eth.getBalance(recipient).
             then(function(balance) {
                 originalBalance = toBN(balance);
-                return instance.deposit(passwordHash,
+                return instance.deposit(recipient,
+                                        secret,
                                         timeout, 
-                                        {from:ownerAccount, value:valueToSend})        
+                                        {from:depositOwner, value:valueToSend})        
             })
             .then(function(txObj) {
                 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
 
-                return instance.withdraw(   ownerAccount,
+                return instance.withdraw(   depositOwner,
                                             web3.utils.stringToHex(password1), 
                                             web3.utils.stringToHex(password2), 
-                                            {from:firstAccount});
+                                            {from:recipient});
             })
             .then(function(txObj) {
                 
@@ -158,43 +144,36 @@ contract('Remittance', function(accounts) {
             .then(function(tx) {
                 
                 txFee = toBN(tx.gasPrice * gasUsed);
-                return web3.eth.getBalance(firstAccount);
+                return web3.eth.getBalance(recipient);
             })
             .then(function(balance) {
                 
                 assert.strictEqual( originalBalance.add(toBN(valueToSend)).sub(txFee).toString(), 
                                     toBN(balance).toString(),
                                     'New balance is not correct');
-            })
-            .catch(function(err) {
-                console.log(err);
-                assert.fail();
             });
     });
 
-    it("Owner shouldn't be able to withdraw deposit with valid passwords until expired", function() {
+    it("Deposit owner shouldn't be able to withdraw deposit with valid passwords until expired", function() {
 
-        return instance.deposit(   passwordHash,
-                            timeout, 
-                            {from:firstAccount, value:valueToSend})        
+        return instance.deposit(    recipient,
+                                    secret,
+                                    timeout, 
+                                    {from:depositOwner, value:valueToSend})        
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
-                    instance.withdraw(  firstAccount,
+                    instance.withdraw(  depositOwner,
                                         web3.utils.stringToHex(password1), 
                                         web3.utils.stringToHex(password2),
-                                        {from:ownerAccount}),
+                                        {from:depositOwner}),
                     'Deposit is not expired');
-            })
-            .catch(function(err) {
-                console.log(err);
-                assert.fail();
             });
     });
 
     it('Contract should have a cut of the action', function() {
 
-        return instance.setDepositFee('100', {from: ownerAccount})
+        return instance.setDepositFee('100', {from: contractOwner})
             .then(function() {
                 
                 return instance.depositFee();
@@ -203,19 +182,20 @@ contract('Remittance', function(accounts) {
 
                 assert.strictEqual('100', depositFee.toString(), 'Deposit fee is not set');
 
-                return instance.deposit(passwordHash, 
+                return instance.deposit(recipient,
+                                        secret, 
                                         timeout,
-                                        {from:ownerAccount, value:valueToSend});
+                                        {from:depositOwner, value:valueToSend});
             })
             .then(function(txObj) {
                 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
-                return instance.withdraw(   ownerAccount,
+                return instance.withdraw(   depositOwner,
                                             web3.utils.stringToHex(password1), 
                                             web3.utils.stringToHex(password2), 
-                                            {from:firstAccount});
+                                            {from:recipient});
             })
             .then(function(txObj) {
                 
@@ -234,10 +214,6 @@ contract('Remittance', function(accounts) {
 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogWithdraw');
-            })
-            .catch(function(err) {
-                console.log(err);
-                assert.fail();
             });
     });
 });
