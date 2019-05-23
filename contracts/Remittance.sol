@@ -10,15 +10,14 @@ contract Remittance is Running
     uint constant MONTH_IN_SECS = 1 * 28 days;
     mapping(address => Deposit) public deposits;
 
-    event LogDeposit(address indexed owner, bytes32 password, uint indexed expires, uint value, uint depositFee);
-    event LogTransfer(address indexed owner, address indexed remittant, uint256 amount);
-    event LogTimeoutChanged(address indexed owner, uint newTime, uint oldTime);
-    event LogWithdraw(address indexed owner, uint amount);
-    event LogDepositFee(address indexed owner, uint oldFee, uint newFee);
-
+    event LogDeposit(address indexed remiter, bytes32 password, uint indexed expires, uint value, uint depositFee);
+    event LogTransfer(address indexed remiter, address indexed remittant, uint256 amount);
+    event LogWithdraw(address indexed remitter, uint amount);
+    event LogDepositFee(address indexed remitter, uint oldFee, uint newFee);
+    
     struct Deposit
     {
-        address owner;
+        address remitter;
         bytes32 secret;
         uint expires;
         uint value;
@@ -42,9 +41,9 @@ contract Remittance is Running
         _;
     }
 
-    function encode(bytes32 s1, bytes32 s2) public pure returns (bytes32)
+    function encode(address recipient, bytes32 password1, bytes32 password2) public pure returns (bytes32)
     {
-        return keccak256(abi.encodePacked(s1, s2));
+        return keccak256(abi.encodePacked(recipient, password1, password2));
     }
 
     function setDepositFee(uint _depositFee)
@@ -67,13 +66,12 @@ contract Remittance is Running
         return now > deposit.expires;
     }
 
-    function deposit(address recipient, bytes32 secret, uint timeout)
+    function deposit(bytes32 secret, uint timeout)
         public
         payable
         depositDoesNotExist(msg.sender)
     {
         // Amount deposited to contract, we need something
-        require(recipient != address(0x0), 'Invalid recipient');
         require(msg.value > 0, 'Need to deposit something');
         require(timeout > 0 && timeout < MONTH_IN_SECS, 'Timeout needs to be valid');
         require(uint(secret) > 0, 'Invalid hash');
@@ -88,41 +86,49 @@ contract Remittance is Running
 
         deposits[msg.sender] = Deposit(
                                         {
-                                            owner: msg.sender,
-                                            secret: encode(bytes32(uint256(recipient)), secret),
+                                            remitter: msg.sender,
+                                            secret: secret,
                                             expires: timeout + now,
                                             value: depositValue
                                         }
                                     );
 
         emit LogDeposit(msg.sender,
-                        encode(bytes32(uint256(recipient)), secret),
+                        secret,
                         timeout + now,
                         depositValue,
                         depositFee);
     }
 
-    function withdraw(address depositOwner, bytes32 _password1, bytes32 _password2)
+    function remitterWithdraw()
         public
-        depositExists(depositOwner)
+        depositExists(msg.sender)
     {
-        Deposit memory d = deposits[depositOwner];
-        require(d.value > 0, 'No balance available');
+        require(isExpired(msg.sender), 'Deposit is not expired');
 
-        if (depositOwner == msg.sender)
-        {
-            require(isExpired(depositOwner), 'Deposit is not expired');
-        }
-        else
-        {
-            require(encode(bytes32(uint256(msg.sender)), encode(_password1, _password2)) == d.secret, 'Invalid answer');
-        }
-
-        uint valueToSend = d.value;
-        delete deposits[depositOwner];
-        emit LogTransfer(   depositOwner,
+        uint valueToSend = deposits[msg.sender].value;
+        delete deposits[msg.sender];
+        emit LogTransfer(   msg.sender,
                             msg.sender,
                             valueToSend);
+
+        msg.sender.transfer(valueToSend);
+    }
+
+    function withdraw(address remitter, bytes32 _password1, bytes32 _password2)
+        public
+        depositExists(remitter)
+    {
+        Deposit memory d = deposits[remitter];
+        require(d.value > 0, 'No balance available');
+        require(encode(msg.sender, _password1, _password2) == d.secret, 'Invalid answer');
+
+        uint valueToSend = d.value;
+        delete deposits[remitter];
+        emit LogTransfer(   remitter,
+                            msg.sender,
+                            valueToSend);
+
         msg.sender.transfer(valueToSend);
     }
 

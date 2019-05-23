@@ -22,7 +22,7 @@ contract('Remittance', function(accounts) {
             .then(_instance => {
                 instance = _instance;
 
-                return instance.encode.call(stringToHex(password1), stringToHex(password2));
+                return instance.encode.call(recipient, stringToHex(password1), stringToHex(password2));
 
             })
             .then(function(hash) {
@@ -39,8 +39,7 @@ contract('Remittance', function(accounts) {
     });
 
     it('Should emit on deposit', function() {
-        return instance.deposit(recipient, 
-                                secret, 
+        return instance.deposit(secret, 
                                 timeout,
                                 {from:depositOwner, value:valueToSend})
             .then(function(txObj) {
@@ -57,15 +56,13 @@ contract('Remittance', function(accounts) {
 
     it('Should be unable to deposit after a successful deposit', function() {
 
-        return instance.deposit(recipient,
-                                secret, 
+        return instance.deposit(secret, 
                                 timeout,
                                 {from:depositOwner, value:valueToSend})
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
-                    instance.deposit(recipient,
-                                    secret, 
+                    instance.deposit(secret, 
                                     timeout,
                                     {from:depositOwner, value:valueToSend}), 
                     'Deposit exists'
@@ -76,8 +73,7 @@ contract('Remittance', function(accounts) {
     it('Deposit should revert if no value', function() {
 
         return truffleAssert.reverts(
-                instance.deposit(   recipient,
-                                    secret, 
+                instance.deposit(   secret, 
                                     timeout,
                                     {from:depositOwner, value:'0'}),
                 'Need to deposit something');
@@ -85,8 +81,7 @@ contract('Remittance', function(accounts) {
 
     it('Should be unable to withdraw deposit with invalid passwords', function() {
 
-        return instance.deposit(    recipient,
-                                    secret, 
+        return instance.deposit(    secret, 
                                     timeout,
                                     {from:depositOwner, value:valueToSend})
             .then(function(txObj) {
@@ -119,8 +114,7 @@ contract('Remittance', function(accounts) {
         return web3.eth.getBalance(recipient).
             then(function(balance) {
                 originalBalance = toBN(balance);
-                return instance.deposit(recipient,
-                                        secret,
+                return instance.deposit(secret,
                                         timeout, 
                                         {from:depositOwner, value:valueToSend})        
             })
@@ -156,17 +150,13 @@ contract('Remittance', function(accounts) {
 
     it("Deposit owner shouldn't be able to withdraw deposit with valid passwords until expired", function() {
 
-        return instance.deposit(    recipient,
-                                    secret,
+        return instance.deposit(    secret,
                                     timeout, 
                                     {from:depositOwner, value:valueToSend})        
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
-                    instance.withdraw(  depositOwner,
-                                        web3.utils.stringToHex(password1), 
-                                        web3.utils.stringToHex(password2),
-                                        {from:depositOwner}),
+                    instance.remitterWithdraw({from:depositOwner}),
                     'Deposit is not expired');
             });
     });
@@ -182,8 +172,7 @@ contract('Remittance', function(accounts) {
 
                 assert.strictEqual('100', depositFee.toString(), 'Deposit fee is not set');
 
-                return instance.deposit(recipient,
-                                        secret, 
+                return instance.deposit(secret, 
                                         timeout,
                                         {from:depositOwner, value:valueToSend});
             })
