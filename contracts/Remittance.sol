@@ -8,11 +8,10 @@ contract Remittance is Running
     uint public depositFee;
     mapping(address => uint) public fees;
     uint constant MONTH_IN_SECS = 1 * 28 days;
-    mapping(address => Deposit) public deposits;
-    mapping(uint => bool) public puzzles;
-
-    event LogDeposit(address indexed remiter, bytes32 password, uint indexed expires, uint value, uint depositFee);
-    event LogTransfer(address indexed remiter, address indexed remittant, uint256 amount);
+    mapping(bytes32 => Deposit) public deposits;
+    
+    event LogDeposit(address indexed remiter, bytes32 puzzle, uint indexed expires, uint value, uint depositFee);
+    event LogTransfer(bytes32 puzzle, address indexed remittant, uint256 amount);
     event LogWithdraw(address indexed remitter, uint amount);
     event LogDepositFee(address indexed remitter, uint oldFee, uint newFee);
     
@@ -30,21 +29,24 @@ contract Remittance is Running
     {
     }
 
-    modifier depositDoesNotExist(address addr)
+    modifier depositDoesNotExist(bytes32 puzzle)
     {
-        require(deposits[addr].expires == 0, 'Deposit exists');
+        require(deposits[puzzle].expires == 0, 'Deposit exists');
         _;
     }
 
-    modifier depositExists(address addr)
+    modifier depositExists(bytes32 puzzle)
     {
-        require(deposits[addr].expires > 0, 'Invalid deposit');
+        require(deposits[puzzle].expires > 0, 'Invalid deposit');
         _;
     }
 
-    function encode(address recipient, bytes32 password1, bytes32 password2) public pure returns (bytes32)
+    function createPuzzle(address recipient, bytes32 password1) public pure returns (bytes32)
     {
-        return keccak256(abi.encodePacked(recipient, password1, password2));
+        require(recipient != address(0x0), 'Invalid address');
+        require(password1 != "", 'Invalid password');
+
+        return keccak256(abi.encodePacked(recipient, password1));
     }
 
     function setDepositFee(uint _depositFee)
@@ -57,26 +59,25 @@ contract Remittance is Running
         depositFee = _depositFee;
     }
 
-    function isExpired(address addr)
+    function isExpired(bytes32 puzzle)
         public
         view
-        depositExists(addr)
+        depositExists(puzzle)
         returns(bool)
     {
-        Deposit storage deposit = deposits[addr];
+        Deposit storage deposit = deposits[puzzle];
         return now > deposit.expires;
     }
 
     function deposit(bytes32 puzzle, uint timeout)
         public
         payable
-        depositDoesNotExist(msg.sender)
+        depositDoesNotExist(puzzle)
     {
         // Amount deposited to contract, we need something
         require(msg.value > 0, 'Need to deposit something');
         require(timeout > 0 && timeout < MONTH_IN_SECS, 'Timeout needs to be valid');
-        require(uint(puzzle) > 0, 'Invalid hash');
-        require(!puzzles[uint(puzzle)], 'Try another puzzle');
+        require(puzzle != "", 'Invalid puzzle');
 
         uint depositValue = msg.value;
         if (depositFee < msg.value)
@@ -86,7 +87,7 @@ contract Remittance is Running
             fees[owner] = fees[owner].add(depositFee);
         }
 
-        deposits[msg.sender] = Deposit(
+        deposits[puzzle] = Deposit(
                                         {
                                             remitter: msg.sender,
                                             puzzle: puzzle,
@@ -102,33 +103,33 @@ contract Remittance is Running
                         depositFee);
     }
 
-    function remitterWithdraw()
+    function remitterWithdraw(bytes32 puzzle)
         public
-        depositExists(msg.sender)
+        depositExists(puzzle)
     {
-        require(isExpired(msg.sender), 'Deposit is not expired');
+        require(isExpired(puzzle), 'Deposit is not expired');
 
-        uint valueToSend = deposits[msg.sender].value;
+        uint valueToSend = deposits[puzzle].value;
         require(valueToSend > 0, 'Nothing to withdraw');
 
-        delete deposits[msg.sender];
-        emit LogTransfer(   msg.sender,
+        delete deposits[puzzle];
+        emit LogTransfer(   puzzle,
                             msg.sender,
                             valueToSend);
 
         msg.sender.transfer(valueToSend);
     }
 
-    function withdraw(address remitter, bytes32 _password1, bytes32 _password2)
+    function withdraw(bytes32 puzzle, bytes32 _password1)
         public
-        depositExists(remitter)
+        depositExists(puzzle)
     {
-        uint valueToSend = deposits[remitter].value;
+        uint valueToSend = deposits[puzzle].value;
         require(valueToSend > 0, 'No balance available');
-        require(encode(msg.sender, _password1, _password2) == deposits[remitter].puzzle, 'Invalid answer');
+        require(createPuzzle(msg.sender, _password1) == deposits[puzzle].puzzle, 'Invalid answer');
 
-        delete deposits[remitter];
-        emit LogTransfer(   remitter,
+        delete deposits[puzzle];
+        emit LogTransfer(   puzzle,
                             msg.sender,
                             valueToSend);
 
