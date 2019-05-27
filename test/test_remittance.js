@@ -63,7 +63,7 @@ contract('Remittance', function(accounts) {
                     instance.deposit(puzzle, 
                                     timeout,
                                     {from:depositOwner, value:valueToSend}), 
-                    'Deposit exists'
+                    'Deposit is not empty'
                 );
             });
     });
@@ -99,7 +99,7 @@ contract('Remittance', function(accounts) {
             instance.withdraw(  depositOwner,
                                 web3.utils.stringToHex(password), 
                                 {from:recipient}),
-            'Invalid deposit');
+            'Deposit is not valid');
     });
 
     it('Should be able to withdraw deposit with valid passwords', function() {
@@ -197,6 +197,32 @@ contract('Remittance', function(accounts) {
 
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogWithdraw');
+            });
+    });
+
+    it('Should not be able to use the same puzzle twice', function() {
+
+        return instance.deposit(puzzle, 
+                                timeout,
+                                {from:depositOwner, value:valueToSend})
+            .then(function(txObj) {
+                
+                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
+                assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
+                
+                return instance.withdraw(   puzzle,
+                                            web3.utils.stringToHex(password), 
+                                            {from:recipient});
+            })
+            .then(function(txObj) {
+                
+                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
+                assert.strictEqual(txObj.logs[0].event, 'LogTransfer');
+                
+                truffleAssert.reverts(  instance.deposit(   puzzle, 
+                                                            timeout,
+                                                            {from:depositOwner, value:valueToSend}),
+                                        'Deposit is not empty');
             });
     });
 });
