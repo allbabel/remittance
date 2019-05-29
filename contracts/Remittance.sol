@@ -10,7 +10,7 @@ contract Remittance is Running
     uint constant MONTH_IN_SECS = 1 * 28 days;
     mapping(bytes32 => Deposit) public deposits;
 
-    event LogDeposit(address indexed remiter, bytes32 puzzle, uint indexed expires, uint value, uint depositFee);
+    event LogDeposit(address indexed remiter, bytes32 puzzle, uint expires, uint value, uint depositFee);
     event LogTransfer(bytes32 puzzle, address indexed remittant, uint256 amount);
     event LogWithdraw(address indexed remitter, uint amount);
     event LogDepositFee(address indexed remitter, uint oldFee, uint newFee);
@@ -31,13 +31,13 @@ contract Remittance is Running
 
     modifier depositIsValid(bytes32 puzzle)
     {
-        require(    deposits[puzzle].puzzle != "", 'Deposit is not valid');
+        require(    deposits[puzzle].remitter != address(0x0), 'Deposit is not valid');
         _;
     }
 
     modifier depositIsEmpty(bytes32 puzzle)
     {
-        require(    deposits[puzzle].puzzle == "", 'Deposit is not empty');
+        require(    deposits[puzzle].remitter == address(0x0), 'Deposit is not empty');
         _;
     }
 
@@ -120,15 +120,16 @@ contract Remittance is Running
         msg.sender.transfer(valueToSend);
     }
 
-    function withdraw(bytes32 puzzle, bytes32 _password1)
+    function withdraw(bytes32 _password1)
         public
-        depositIsValid(puzzle)
     {
+        bytes32 puzzle = createPuzzle(msg.sender, _password1);
         uint valueToSend = deposits[puzzle].value;
         require(valueToSend > 0, 'No balance available');
-        require(createPuzzle(msg.sender, _password1) == puzzle, 'Invalid answer');
-
+        // Clear members except remitter which we use to track used puzzles.
         deposits[puzzle].value = 0;
+        deposits[puzzle].puzzle = "";
+        deposits[puzzle].expires = 0;
 
         emit LogTransfer(   puzzle,
                             msg.sender,

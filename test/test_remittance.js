@@ -85,10 +85,9 @@ contract('Remittance', function(accounts) {
             .then(function(txObj) {
                 
                 truffleAssert.reverts(
-                    instance.withdraw(  puzzle, 
-                                        web3.utils.stringToHex(falsepassword),
+                    instance.withdraw(  web3.utils.stringToHex(falsepassword),
                                         {from:recipient}),
-                    'Invalid answer'
+                    'No balance available'
                 );
             });
     });
@@ -96,10 +95,9 @@ contract('Remittance', function(accounts) {
     it('Should be unable to withdraw if not already deposited', function() {
 
         return truffleAssert.reverts(
-            instance.withdraw(  depositOwner,
-                                web3.utils.stringToHex(password), 
+            instance.withdraw(  web3.utils.stringToHex(password), 
                                 {from:recipient}),
-            'Deposit is not valid');
+            'No balance available');
     });
 
     it('Should be able to withdraw deposit with valid passwords', function() {
@@ -119,8 +117,7 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
 
-                return instance.withdraw(   puzzle,
-                                            web3.utils.stringToHex(password), 
+                return instance.withdraw(   web3.utils.stringToHex(password), 
                                             {from:recipient});
             })
             .then(function(txObj) {
@@ -176,8 +173,7 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
-                return instance.withdraw(   puzzle,
-                                            web3.utils.stringToHex(password), 
+                return instance.withdraw(   web3.utils.stringToHex(password), 
                                             {from:recipient});
             })
             .then(function(txObj) {
@@ -210,8 +206,7 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
-                return instance.withdraw(   puzzle,
-                                            web3.utils.stringToHex(password), 
+                return instance.withdraw(   web3.utils.stringToHex(password), 
                                             {from:recipient});
             })
             .then(function(txObj) {
