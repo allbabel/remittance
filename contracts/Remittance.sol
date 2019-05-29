@@ -10,15 +10,14 @@ contract Remittance is Running
     uint constant MONTH_IN_SECS = 1 * 28 days;
     mapping(bytes32 => Deposit) public deposits;
 
-    event LogDeposit(address indexed remiter, bytes32 puzzle, uint expires, uint value, uint depositFee);
-    event LogTransfer(bytes32 puzzle, address indexed remittant, uint256 amount);
+    event LogDeposit(address indexed remiter, bytes32 indexed puzzle, uint expires, uint value, uint depositFee);
+    event LogTransfer(bytes32 indexed puzzle, address indexed remittant, uint256 amount);
     event LogWithdraw(address indexed remitter, uint amount);
     event LogDepositFee(address indexed remitter, uint oldFee, uint newFee);
     
     struct Deposit
     {
         address remitter;
-        bytes32 puzzle;
         uint expires;
         uint value;
     }
@@ -89,7 +88,6 @@ contract Remittance is Running
         deposits[puzzle] = Deposit(
                                         {
                                             remitter: msg.sender,
-                                            puzzle: puzzle,
                                             expires: timeout + now,
                                             value: depositValue
                                         }
@@ -128,7 +126,6 @@ contract Remittance is Running
         require(valueToSend > 0, 'No balance available');
         // Clear members except remitter which we use to track used puzzles.
         deposits[puzzle].value = 0;
-        deposits[puzzle].puzzle = "";
         deposits[puzzle].expires = 0;
 
         emit LogTransfer(   puzzle,
