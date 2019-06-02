@@ -13,14 +13,14 @@ contract('Running', function(accounts) {
 
     it('Running by default is true', async function() {
 
-        assert.isTrue(await instance.getRunning.call());
+        assert.isTrue(await instance.isRunning.call());
     });
 
     it('the owner should be able to change running', async function() {
         
         const txObj = await instance.pause({from: ownerAccount});
         
-        assert.isFalse(await instance.getRunning.call());
+        assert.isFalse(await instance.isRunning.call());
         assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
         assert.strictEqual(txObj.logs[0].event, 'LogRunningChanged');
     });

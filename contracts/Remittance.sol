@@ -22,20 +22,23 @@ contract Remittance is Running
         uint value;
     }
 
-    constructor()
+    constructor(uint _depositFee)
         Running(true)
         public
     {
+        depositFee = _depositFee;
     }
 
     modifier depositIsValid(bytes32 puzzle)
     {
+        require(puzzle != "", 'Invalid puzzle');
         require(    deposits[puzzle].remitter != address(0x0), 'Deposit is not valid');
         _;
     }
 
     modifier depositIsEmpty(bytes32 puzzle)
     {
+        require(puzzle != "", 'Invalid puzzle');
         require(    deposits[puzzle].remitter == address(0x0), 'Deposit is not empty');
         _;
     }
@@ -50,8 +53,10 @@ contract Remittance is Running
 
     function setDepositFee(uint _depositFee)
         public
-        isOwner
+        onlyOwner
+        whenAlive
     {
+        require(_depositFee > 0, 'Deposit needs to be greater than 0');
         require(depositFee != _depositFee, 'Values are equal');
         emit LogDepositFee(msg.sender, depositFee, _depositFee);
 
@@ -71,11 +76,11 @@ contract Remittance is Running
         public
         payable
         depositIsEmpty(puzzle)
+        whenAlive
     {
         // Amount deposited to contract, we need something
         require(msg.value > 0, 'Need to deposit something');
         require(timeout > 0 && timeout < MONTH_IN_SECS, 'Timeout needs to be valid');
-        require(puzzle != "", 'Invalid puzzle');
 
         uint depositValue = msg.value;
         if (depositFee < msg.value)
@@ -105,6 +110,7 @@ contract Remittance is Running
         depositIsValid(puzzle)
     {
         require(isExpired(puzzle), 'Deposit is not expired');
+        require(deposits[puzzle].remitter == msg.sender, 'Remitter needs to be sender');
 
         uint valueToSend = deposits[puzzle].value;
         require(valueToSend > 0, 'Nothing to withdraw');

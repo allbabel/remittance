@@ -2,6 +2,20 @@ const truffleAssert = require('truffle-assertions');
 const RemittanceContract = artifacts.require("./Remittance.sol");
 const { toBN, stringToHex, toWei } = web3.utils;
 
+const timeTravel = function (time) {
+    return new Promise((resolve, reject) => {
+      web3.currentProvider.send({
+        jsonrpc: "2.0",
+        method: "evm_increaseTime",
+        params: [time], // 86400 is num seconds in day
+        id: new Date().getTime()
+      }, (err, result) => {
+        if(err){ return reject(err) }
+        return resolve(result)
+      });
+    })
+}
+
 contract('Remittance', function(accounts) {
 
     [contractOwner, depositOwner, recipient] = accounts;
@@ -9,6 +23,7 @@ contract('Remittance', function(accounts) {
     
     const falsepassword = 'something';
     const timeout = 60 * 60 * 24;
+    const depositFee = 100;
 
     let instance;
     const valueToSend = toWei('0.1', 'ether');
@@ -16,7 +31,7 @@ contract('Remittance', function(accounts) {
     
     beforeEach('initialise contract and hash', () => {
 
-        return RemittanceContract.new({from: contractOwner})
+        return RemittanceContract.new(depositFee, {from: contractOwner})
             .then(_instance => {
                 instance = _instance;
 
@@ -30,7 +45,7 @@ contract('Remittance', function(accounts) {
     
     it('Running by default is true', () => {
 
-        return instance.getRunning.call()
+        return instance.isRunning.call()
             .then(running => {
                 assert.isTrue(running);
             });
@@ -45,10 +60,7 @@ contract('Remittance', function(accounts) {
                 assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
                 assert.strictEqual(txObj.logs[0].event, 'LogDeposit');
                 
-                return instance.deposits.call(puzzle);
-            })
-            .then(function(deposit){
-                assert.strictEqual(deposit.value.toString(), valueToSend);
+                assert.strictEqual(txObj.logs[0].args.puzzle, puzzle);        
             });
     });
 
@@ -134,7 +146,7 @@ contract('Remittance', function(accounts) {
             })
             .then(function(balance) {
                 
-                assert.strictEqual( originalBalance.add(toBN(valueToSend)).sub(txFee).toString(), 
+                assert.strictEqual( originalBalance.add(toBN(valueToSend)).sub(txFee).sub(toBN(depositFee)).toString(), 
                                     toBN(balance).toString(),
                                     'New balance is not correct');
             });
@@ -153,16 +165,37 @@ contract('Remittance', function(accounts) {
             });
     });
 
+    it("Should be able to withdraw after the deposit has expired in 28 days", function() {
+
+        return instance.deposit(    puzzle,
+                                    timeout, 
+                                    {from:depositOwner, value:valueToSend})        
+            .then(function() {
+                
+                return timeTravel(86400 * 28); 
+            })
+            .then(function() {
+
+                return instance.remitterWithdraw(   puzzle, 
+                                                    {from:depositOwner});
+            })
+            .then(function(txObj) {
+                
+                assert.strictEqual(txObj.logs.length, 1, 'We should have an event');
+                assert.strictEqual(txObj.logs[0].event, 'LogTransfer');
+            });
+    });
+
     it('Contract should have a cut of the action', function() {
 
-        return instance.setDepositFee('100', {from: contractOwner})
+        return instance.setDepositFee('150', {from: contractOwner})
             .then(function() {
                 
                 return instance.depositFee();
             })
             .then(function(depositFee) {
 
-                assert.strictEqual('100', depositFee.toString(), 'Deposit fee is not set');
+                assert.strictEqual('150', depositFee.toString(), 'Deposit fee is not set');
 
                 return instance.deposit(puzzle, 
                                         timeout,
@@ -185,7 +218,7 @@ contract('Remittance', function(accounts) {
             })
             .then(function(balance) {
                 
-                assert.strictEqual(balance, '100', 'The contract should have 100 Wei cut');
+                assert.strictEqual(balance, '150', 'The contract should have 100 Wei cut');
                 
                 return instance.withdrawDepositFees();
             })

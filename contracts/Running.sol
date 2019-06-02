@@ -4,8 +4,15 @@ import "./Owned.sol";
 contract Running is Owned
 {
     bool private running;
+    bool private alive;
 
-    event LogRunningChanged(bool oldRunning, bool newRunning);
+    event LogRunningChanged(address sender, bool newRunning);
+
+    modifier whenAlive
+    {
+        require(alive, "We are not alive");
+        _;
+    }
 
     modifier whenRunning
     {
@@ -21,39 +28,37 @@ contract Running is Owned
 
     constructor(bool _running) public
     {
+        alive = true;
         running = _running;
     }
 
-    function getRunning() public view returns(bool)
+    function isRunning() public view returns(bool)
     {
         return running;
     }
 
     function pause() public
+        onlyOwner
         whenRunning
     {
-        setRunning(false);
+        running = false;
+        emit LogRunningChanged(msg.sender, running);
     }
 
     function resume() public
+        onlyOwner
         whenPaused
     {
-        setRunning(true);
-    }
-
-    function setRunning(bool newRunning)
-        public
-        isOwner
-    {
-        emit LogRunningChanged(running, newRunning);
-        running = newRunning;
+        running = true;
+        emit LogRunningChanged(msg.sender, running);
     }
 
     function kill()
         public
-        isOwner
+        onlyOwner
         whenPaused
+        whenAlive
     {
-        selfdestruct(msg.sender);
+        alive = false;
     }
 }
