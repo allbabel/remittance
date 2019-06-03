@@ -3,54 +3,55 @@ import "./Owned.sol";
 
 contract Running is Owned
 {
-    bool private running;
-    bool private alive;
-
-    event LogRunningChanged(address sender, bool newRunning);
+    enum State {PAUSED, RUNNING, DEAD}
+    State state;
+    event LogRunningChanged(address sender, State newState);
+    event LogKilled(address sender);
 
     modifier whenAlive
     {
-        require(alive, "We are not alive");
+        require(state != State.DEAD, "We are not alive");
         _;
     }
 
     modifier whenRunning
     {
-        require(running, "We have stopped");
+        require(state == State.RUNNING, "We have stopped");
         _;
     }
 
     modifier whenPaused
     {
-        require(!running, "We are paused");
+        require(state == State.PAUSED, "We are paused");
         _;
     }
 
     constructor(bool _running) public
     {
-        alive = true;
-        running = _running;
+        state = (_running) ? State.RUNNING : State.PAUSED;
     }
 
     function isRunning() public view returns(bool)
     {
-        return running;
+        return (state == State.RUNNING);
     }
 
     function pause() public
         onlyOwner
         whenRunning
+        whenAlive
     {
-        running = false;
-        emit LogRunningChanged(msg.sender, running);
+        state = State.PAUSED;
+        emit LogRunningChanged(msg.sender, state);
     }
 
     function resume() public
         onlyOwner
         whenPaused
+        whenAlive
     {
-        running = true;
-        emit LogRunningChanged(msg.sender, running);
+        state = State.RUNNING;
+        emit LogRunningChanged(msg.sender, state);
     }
 
     function kill()
@@ -59,6 +60,7 @@ contract Running is Owned
         whenPaused
         whenAlive
     {
-        alive = false;
+        state = State.DEAD;
+        emit LogKilled(msg.sender);
     }
 }

@@ -14,7 +14,7 @@ contract Remittance is Running
     event LogTransfer(bytes32 indexed puzzle, address indexed remittant, uint256 amount);
     event LogWithdraw(address indexed remitter, uint amount);
     event LogDepositFee(address indexed remitter, uint oldFee, uint newFee);
-    
+
     struct Deposit
     {
         address remitter;
@@ -29,10 +29,17 @@ contract Remittance is Running
         depositFee = _depositFee;
     }
 
+    modifier depositIsValidAndFromRemitter(bytes32 puzzle)
+    {
+        require(puzzle != "", 'Invalid puzzle');
+        require(deposits[puzzle].remitter == msg.sender, 'Deposit is not valid');
+        _;
+    }
+
     modifier depositIsValid(bytes32 puzzle)
     {
         require(puzzle != "", 'Invalid puzzle');
-        require(    deposits[puzzle].remitter != address(0x0), 'Deposit is not valid');
+        require(deposits[puzzle].remitter != address(0x0), 'Deposit is not valid');
         _;
     }
 
@@ -107,10 +114,9 @@ contract Remittance is Running
 
     function remitterWithdraw(bytes32 puzzle)
         public
-        depositIsValid(puzzle)
+        depositIsValidAndFromRemitter(puzzle)
     {
         require(isExpired(puzzle), 'Deposit is not expired');
-        require(deposits[puzzle].remitter == msg.sender, 'Remitter needs to be sender');
 
         uint valueToSend = deposits[puzzle].value;
         require(valueToSend > 0, 'Nothing to withdraw');
