@@ -122,7 +122,8 @@ contract Remittance is Running
         require(valueToSend > 0, 'Nothing to withdraw');
 
         deposits[puzzle].value = 0;
-
+        deposits[puzzle].expires = 0;
+        
         emit LogTransfer(   puzzle,
                             msg.sender,
                             valueToSend);

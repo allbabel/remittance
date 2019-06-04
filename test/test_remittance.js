@@ -45,9 +45,9 @@ contract('Remittance', function(accounts) {
     
     it('Running by default is true', () => {
 
-        return instance.isRunning.call()
-            .then(running => {
-                assert.isTrue(running);
+        return instance.state.call()
+            .then(state => {
+                assert.strictEqual(state.toString(), "1");
             });
     });
 

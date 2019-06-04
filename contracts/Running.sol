@@ -4,7 +4,7 @@ import "./Owned.sol";
 contract Running is Owned
 {
     enum State {PAUSED, RUNNING, DEAD}
-    State state;
+    State public state;
     event LogRunningChanged(address sender, State newState);
     event LogKilled(address sender);
 
@@ -29,11 +29,6 @@ contract Running is Owned
     constructor(bool _running) public
     {
         state = (_running) ? State.RUNNING : State.PAUSED;
-    }
-
-    function isRunning() public view returns(bool)
-    {
-        return (state == State.RUNNING);
     }
 
     function pause() public
